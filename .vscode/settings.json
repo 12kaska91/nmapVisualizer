@@ -50,7 +50,11 @@
         "streambuf": "cpp",
         "text_encoding": "cpp",
         "typeinfo": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "cstdarg": "cpp",
+        "cstring": "cpp",
+        "sstream": "cpp",
+        "cinttypes": "cpp"
     },
     "C_Cpp.default.compilerPath": "C:/msys64/ucrt64/bin/gcc.exe"
 }

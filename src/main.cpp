@@ -3,11 +3,14 @@
 #include "graphics.hpp"
 #include "utils.hpp"
 
+#define WINDOW_WIDTH 800
+#define WINDOW_HEIGHT 600
+
 int main(int argc, char *argv[])
 {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
     SDL_Window *window = SDL_CreateWindow("nmapVisualizer",
-                                          800, 600,
+                                          WINDOW_WIDTH, WINDOW_HEIGHT,
                                           0);
 
     if (!window) {
@@ -26,9 +29,10 @@ int main(int argc, char *argv[])
     }
 
     Device deviceList[] = {
-        Device(),
-        Device()
+        Device(renderer),
     };
+
+    deviceList[0].setDimensions(WINDOW_HEIGHT / 4.0f, WINDOW_HEIGHT / 4.0f);
 
     std::string result = win_run_nmap_xml("scanme.nmap.org");
     printf("%s\n", result.c_str());
@@ -44,6 +48,10 @@ int main(int argc, char *argv[])
         SDL_RenderClear(renderer);
 
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+
+        for (auto &device : deviceList) {
+            device.render(renderer);
+        }
 
         SDL_RenderPresent(renderer);
     }
