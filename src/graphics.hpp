@@ -1,60 +1,76 @@
 #ifndef GRAPHICS_HPP
 #define GRAPHICS_HPP
 
-#include <SDL3/SDL.h>
-#include <SDL3_image/SDL_image.h>
-#include <string>
+#include "./utils.hpp"
+#include <gtkmm/application.h>
+#include <gtkmm/window.h>
+#include <gtkmm/menubutton.h>
+#include <gtkmm/box.h>
 
-class Device {
-    public:
-        float x, y;
-        std::string assetPath;
-        SDL_Texture* texture;
-        SDL_Renderer* renderer;
+class MyWindow : public Gtk::Window {
+public:
+    MyWindow() {
+        set_title("nmap Visualizer");
+        set_default_size(300, 100);
 
-        Device(SDL_Renderer* renderer) {
-            this->renderer = renderer;
-            x = 0;
-            y = 0;
-            assetPath = "../assets/pc.svg";
-            texture = loadTexture(assetPath, renderer);
-        }
+        // Create a box layout
+        auto vbox = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 5);
+        set_child(*vbox);
 
-        ~Device() {
-            if (texture) {
-                SDL_DestroyTexture(texture);
-            }
-        }
+        // Create a MenuButton
+        auto menubutton = Gtk::make_managed<Gtk::MenuButton>();
+        menubutton->set_label("Options");
 
-        void setDimensions(float x, float y) {
-            this->x = x;
-            this->y = y;
-        }
+        // Create a Gio::Menu
+        auto menu = Gio::Menu::create();
+        menu->append("Say Hello", "app.hello");
+        menu->append("Quit", "app.quit");
 
-        void setAssetPath(const std::string& path, SDL_Renderer* renderer) {
-            assetPath = path;
-            texture = loadTexture(assetPath, renderer);
-        }
+        // Attach the menu to the button
+        menubutton->set_menu_model(menu);
 
-        void render(SDL_Renderer* renderer) {
-            SDL_FRect* rect = new SDL_FRect{ x, y, texture->h, texture->w };
-            SDL_RenderTexture(renderer, texture, nullptr, rect);
-            delete rect;
-        }
-    private:
-        SDL_Texture* loadTexture(const std::string& filePath, SDL_Renderer* renderer) {
-            SDL_Surface* surface = IMG_Load(filePath.c_str());
-            if (!surface) {
-                SDL_Log("Failed to load image: %s", SDL_GetError());
-                return nullptr;
-            }
-            SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-            if (!texture) {
-                SDL_Log("Failed to create texture: %s", SDL_GetError());
-            }
-            SDL_DestroySurface(surface);
-            return texture;
-        }
+        // Add the button to the layout
+        vbox->append(*menubutton);
+    }
+};
+
+class MyApplication : public Gtk::Application {
+protected:
+    MyApplication() : Gtk::Application("org.kaska.nmapVisualizer") {}
+
+    void on_startup() override {
+        Gtk::Application::on_startup();
+
+        // Define actions
+        add_action("hello", sigc::mem_fun(*this, &MyApplication::on_hello));
+        add_action("quit", sigc::mem_fun(*this, &MyApplication::on_quit));
+    }
+
+    void on_activate() override {
+        auto win = create_window();
+        win->present();
+    }
+
+    Glib::RefPtr<Gtk::Window> create_window() {
+        auto window = new MyWindow();
+        add_window(*window);
+        return Glib::RefPtr<Gtk::Window>(window);
+    }
+
+    // Action handlers
+    void on_hello() {
+        std::cout << "Hello from the menu!" << std::endl;
+    }
+
+    void on_quit() {
+        std::cout << "Quitting..." << std::endl;
+        quit();
+    }
+
+public:
+    static Glib::RefPtr<MyApplication> create() {
+        return Glib::RefPtr<MyApplication>(new MyApplication());
+    }
 };
 
 #endif // GRAPHICS_HPP

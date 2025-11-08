@@ -1,61 +1,33 @@
 #include <iostream>
-#include <SDL3/SDL.h>
+#include <thread>
+#include <clocale>
+#include <locale>
+#include <cstdlib>
 #include "graphics.hpp"
 #include "utils.hpp"
 
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
-
-int main(int argc, char *argv[])
-{
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
-    SDL_Window *window = SDL_CreateWindow("nmapVisualizer",
-                                          WINDOW_WIDTH, WINDOW_HEIGHT,
-                                          0);
-
-    if (!window) {
-        std::cerr << "Failed to create window: " << SDL_GetError() << std::endl;
-        SDL_Quit();
-        return -1;
+int main (int argc, char *argv[]) {
+    try {
+        std::locale::global(std::locale(""));
+    } catch (const std::exception &e) {
+        std::cerr << "Warning: failed to set global locale from environment: " << e.what() << "\n";
+        std::cerr << "Falling back to C locale.\n";
+        std::setlocale(LC_ALL, "C");
     }
 
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, nullptr);
-    
-    if (!renderer) {
-        std::cerr << "Failed to create renderer: " << SDL_GetError() << std::endl;
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        return -1;
+    #ifdef _WIN32
+        _putenv_s("LANG", "C");
+    #else
+        setenv("LANG", "C", 1);
+    #endif
+
+    std::string targets = "scanme.nmap.org";
+    std::string nmapOutput = win_run_nmap_xml(targets);
+    auto devices = parse_nmap_xml(nmapOutput);
+    for (const auto& device : devices) {
+        std::cout << "Device IP: " << device.ipAddress << ", MAC: " << device.macAddress << ", OS: " << device.operatingSystem << std::endl;
     }
 
-    Device deviceList[] = {
-        Device(renderer),
-    };
-
-    deviceList[0].setDimensions(WINDOW_HEIGHT / 4.0f, WINDOW_HEIGHT / 4.0f);
-
-    std::string result = win_run_nmap_xml("scanme.nmap.org");
-    printf("%s\n", result.c_str());
-
-    bool running = true;
-    SDL_Event event;
-    while (running) {
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_EVENT_QUIT) {
-                running = false;
-            }
-        }
-        SDL_RenderClear(renderer);
-
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-
-        for (auto &device : deviceList) {
-            device.render(renderer);
-        }
-
-        SDL_RenderPresent(renderer);
-    }
-    SDL_DestroyWindow(window);
-    SDL_Quit();
-    return 0;
+    auto app = MyApplication::create();
+    return app->run(argc, argv);
 }
