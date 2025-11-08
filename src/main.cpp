@@ -1,8 +1,3 @@
-#include <iostream>
-#include <thread>
-#include <clocale>
-#include <locale>
-#include <cstdlib>
 #include "graphics.hpp"
 #include "utils.hpp"
 
@@ -21,13 +16,6 @@ int main (int argc, char *argv[]) {
         setenv("LANG", "C", 1);
     #endif
 
-    std::string targets = "scanme.nmap.org";
-    std::string nmapOutput = win_run_nmap_xml(targets);
-    auto devices = parse_nmap_xml(nmapOutput);
-    for (const auto& device : devices) {
-        std::cout << "Device IP: " << device.ipAddress << ", MAC: " << device.macAddress << ", OS: " << device.operatingSystem << std::endl;
-    }
-
-    auto app = MyApplication::create();
+    auto app = nmapVisualizer::create();
     return app->run(argc, argv);
 }

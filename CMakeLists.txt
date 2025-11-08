@@ -7,7 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(PkgConfig REQUIRED)
 
-# libxml++
+# libxml2
 pkg_check_modules(LIBXML2 REQUIRED libxml-2.0)
 
 # gtkmm

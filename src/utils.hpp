@@ -9,7 +9,7 @@
 #include <stdexcept>
 #include <libxml/parser.h>
 #include <vector>
-    
+
 class Port {
 public:
     int portNumber;
@@ -41,23 +41,58 @@ public:
         : ipAddress(ip), macAddress(mac), vendor(ven), deviceType(devType), ports(prt), operatingSystem(os) {}
 };
 
+#if defined(_WIN32) || defined(_WIN64)
 std::string win_run_nmap_xml(const std::string &targets, const std::string &nmap_path = "C:\\Program Files (x86)\\Nmap\\nmap.exe") {
     // Note: " -oX - " -> XML to stdout
     std::string cmd = "\"" + nmap_path + "\" -oX - " + targets + " 2>nul";
     std::array<char, 4096> buffer;
     std::string result;
 
-    // _popen is available in MSVC; returns FILE* you can read
+    // _popen is available on Windows; returns FILE* you can read
     FILE* pipe = _popen(cmd.c_str(), "r");
     if (!pipe) {
         throw std::runtime_error("Failed to run nmap (is it installed and in PATH?)");
     }
-    while (fgets(buffer.data(), (int)buffer.size(), pipe) != nullptr) {
+    while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr) {
         result += buffer.data();
     }
     _pclose(pipe);
     return result;
 }
+#endif
+
+#if defined(__linux__)
+std::string linux_run_nmap_xml(const std::string &targets, const std::string &nmap_path = "/usr/bin/nmap") {
+    // Note: " -oX - " -> XML to stdout
+    std::string cmd = nmap_path + " -oX - " + targets + " 2>/dev/null";
+    std::array<char, 4096> buffer;
+    std::string result;
+
+    FILE* pipe = popen(cmd.c_str(), "r");
+    if (!pipe) {
+        throw std::runtime_error("Failed to run nmap (is it installed and in PATH?)");
+    }
+    while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr) {
+        result += buffer.data();
+    }
+    pclose(pipe);
+    return result;
+}
+#endif
+
+std::string run_nmap(const std::string &targets, std::string nmap_path = "") {
+    // Cross-platform nmap runner (synchronous) — return result directly
+    #if defined(_WIN32) || defined(_WIN64)
+        if (nmap_path.empty()) { nmap_path = "C:\\Program Files (x86)\\Nmap\\nmap.exe"; }
+        return win_run_nmap_xml(targets, nmap_path);
+    #elif defined(__linux__)
+        if (nmap_path.empty()) { nmap_path = "/usr/bin/nmap"; }
+        return linux_run_nmap_xml(targets, nmap_path);
+    #else
+        throw std::runtime_error("Unsupported platform for running nmap");
+    #endif
+}
+
 
 std::vector<DeviceInfo> parse_nmap_xml(const std::string &xmlData) {
     std::vector<DeviceInfo> devices;
