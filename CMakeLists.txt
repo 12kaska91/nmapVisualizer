@@ -19,6 +19,8 @@ add_executable(main
     src/main.cpp
     src/graphics.hpp
     src/utils.hpp
+    src/globals.hpp
+    src/globals.cpp
 )
 
 # Include directories
