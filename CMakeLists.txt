@@ -22,6 +22,7 @@ find_package(OpenGL REQUIRED)
 # Executable
 add_executable(main
     src/main.cpp
+    src/globals.cpp
 )
 
 # Include directories

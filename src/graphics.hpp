@@ -133,7 +133,7 @@ class MainWindow : public Gtk::Window {
     public:
         MainWindow() {
             set_title("nmap Visualizer");
-            set_default_size(300, 100);
+            set_default_size(1024, 768);
 
             // create top bar elements
             auto file = Gtk::make_managed<Gtk::MenuButton>();
@@ -150,6 +150,7 @@ class MainWindow : public Gtk::Window {
             auto top_hbox = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 10); 
             auto top_hbox_left = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 5);
             auto top_hbox_right = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 5);
+
             auto vbox = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 5);
 
             // attributes panel
@@ -317,6 +318,19 @@ class nmapVisualizer : public Gtk::Application {
             for (const auto& device : devices) {
                 std::cout << "Device IP: " << device.ipAddress << ", MAC: " << device.macAddress << ", OS: " << device.operatingSystem << std::endl;
             }
+            
+            /*
+            save_devices(devices);
+            if (auto win = dynamic_cast<MainWindow*>(get_active_window())) {
+                if (auto map_area = win->get_map_area()) {
+                    map_area->clear_devices();
+                    for (const auto& device : devices) {
+                        map_area->add_device(device);
+                    }
+                    map_area->draw();
+                }
+            }
+            */
         }
 
     public:
