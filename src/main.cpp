@@ -1,5 +1,4 @@
 #include "graphics.hpp"
-#include "utils.hpp"
 
 int main (int argc, char *argv[]) {
     try {
@@ -17,5 +16,19 @@ int main (int argc, char *argv[]) {
     #endif
 
     auto app = nmapVisualizer::create();
+
+    auto css = Gtk::CssProvider::create();
+    css->load_from_data(R"(
+      * {
+        border-radius: 0;
+      }
+    )");
+
+    Gtk::StyleContext::add_provider_for_display(
+        Gdk::Display::get_default(),
+        css,
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION
+    );
+
     return app->run(argc, argv);
 }

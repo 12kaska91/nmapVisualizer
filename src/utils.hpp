@@ -4,7 +4,6 @@
 #include <cstdio>
 #include <array>
 #include <iostream>
-#include <memory>
 #include <string>
 #include <stdexcept>
 #include <libxml/parser.h>
@@ -92,7 +91,6 @@ std::string run_nmap(const std::string &targets, std::string nmap_path = "") {
         throw std::runtime_error("Unsupported platform for running nmap");
     #endif
 }
-
 
 std::vector<DeviceInfo> parse_nmap_xml(const std::string &xmlData) {
     std::vector<DeviceInfo> devices;
