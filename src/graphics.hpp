@@ -27,12 +27,16 @@ public:
         add_controller(gesture_click);
         gesture_click->signal_pressed().connect(sigc::mem_fun(*this, &MapArea::on_click));
         signal_resize().connect([this](int width, int height){
-            for (auto& d : devices) {
-                int num = devices.size();
-                double angle = (&d - &devices[0]) * (2 * M_PI / num);
-                d.x = width / 2.0 + (width / 3.0) * cos(angle);
-                d.y = height / 2.0 + (height / 3.0) * sin(angle);
+            for (auto& network : networks) {
+                auto& devices = network.devices;
+                for (auto& d : devices) {
+                    int num = devices.size();
+                    double angle = (&d - &devices[0]) * (2 * M_PI / num);
+                    d.x = width / 2.0 + (width / 3.0) * cos(angle);
+                    d.y = height / 2.0 + (height / 3.0) * sin(angle);
+                }
             }
+            queue_draw();
         });
 
         set_draw_func(sigc::mem_fun(*this, &MapArea::draw_map));
@@ -44,7 +48,6 @@ private:
     struct Device {
         std::string name;
         double x, y;
-        Gdk::RGBA color;
     };
 
     struct Network {
@@ -53,19 +56,20 @@ private:
         double center_x, center_y;
     };
 
-    std::vector<Device> devices;
-    std::vector<std::pair<int,int>> connections;
+    std::vector<Network> networks;
 
     void on_click(int /*n_press*/, double x, double y) {
-        for (auto& d : devices) {
-            double dx = x - d.x;
-            double dy = y - d.y;
-            if (dx*dx + dy*dy <= 20*20) {
-                nmapVisualizerGlobals::selected = d.name;
-                std::cout << "Selected device set to: " << nmapVisualizerGlobals::selected << std::endl;
-                return;
+        for (auto& network : networks) {
+            for (auto& d : network.devices) {
+                double dx = x - d.x;
+                double dy = y - d.y;
+                if (dx*dx + dy*dy <= 20*20) {
+                    nmapVisualizerGlobals::selected = d.name;
+                    std::cout << "Selected device set to: " << nmapVisualizerGlobals::selected << std::endl;
+                    return;
+                }
             }
-        }
+        }            
     }
 
     void draw_map(const Cairo::RefPtr<Cairo::Context>& cr, int width, int height) {
@@ -74,63 +78,66 @@ private:
         cr->rectangle(0, 0, width, height);
         cr->fill();
 
-        if(devices.empty()) {
-            Gdk::RGBA color;
-            color.set_rgba(0.0, 0.6, 1.0, 1.0);
-            devices.push_back({"Test Device", width / 2.0, height / 2.0, color});
-            // Add more devices for demonstration
-            devices.push_back({"Device 2", width / 4.0, height / 4.0, Gdk::RGBA(1.0, 0.0, 0.0, 1.0)});
-            devices.push_back({"Device 3", 3 * width / 4.0, height / 4.0, Gdk::RGBA(0.0, 1.0, 0.0, 1.0)});
-            devices.push_back({"Device 4", width / 4.0, 3 * height / 4.0, Gdk::RGBA(0.0, 0.0, 1.0, 1.0)});
-            devices.push_back({"Device 5", 3 * width / 4.0, 3 * height / 4.0, Gdk::RGBA(1.0, 1.0, 0.0, 1.0)});
-            devices.push_back({"Device 6", width / 2.0, height / 4.0, Gdk::RGBA(1.0, 0.0, 1.0, 1.0)});
-            devices.push_back({"Device 7", width / 2.0, 3 * height / 4.0, Gdk::RGBA(0.0, 1.0, 1.0, 1.0)});
+        if(networks.empty()) {
+            networks.push_back(Network{
+                "192.168.1.0/24",
+                {
+                    {"Device A", 0, 0},
+                    {"Device B", 0, 0},
+                    {"Device C", 0, 0},
+                    {"Device D", 0, 0},
+                    {"Device E", 0, 0}
+                },
+                width / 2.0,
+                height / 2.0
+            });
         }
 
-        for (auto& d : devices) {
-            int num = devices.size();
-            double angle = (&d - &devices[0]) * (2 * M_PI / num);
-            d.x = width / 2.0 + (width / 3.0) * cos(angle);
-            d.y = height / 2.0 + (height / 3.0) * sin(angle);
+        for (auto& network : networks) {
+            auto& devices = network.devices;
+            for (auto& d : devices) {
+                int num = devices.size();
+                double angle = (&d - &devices[0]) * (2 * M_PI / num);
+                d.x = width / 2.0 + (width / 3.0) * cos(angle);
+                d.y = height / 2.0 + (height / 3.0) * sin(angle);
 
+            }
+
+            // Draw connections
+            cr->set_line_width(2.0);
+            cr->set_source_rgb(0.7, 0.7, 0.7);
+            for (auto& d : devices) {
+                cr->move_to(d.x, d.y);
+                cr->line_to(width/2, height/2);
+                cr->stroke();
+            }
+
+            // Draw devices
+            for (auto& d : devices) {
+                // circle
+                cr->set_source_rgb(255, 255, 255);
+                cr->arc(d.x, d.y, 20.0, 0, 2*M_PI);
+                cr->fill();
+
+                // font
+                cr->select_font_face("Sans", Cairo::ToyFontFace::Slant::NORMAL, Cairo::ToyFontFace::Weight::NORMAL);
+                cr->set_font_size(10.0);
+
+                // extents
+                Cairo::TextExtents extents;
+                cr->get_text_extents(d.name, extents);
+
+                // label shadow
+                cr->set_source_rgba(0, 0, 0, 0.5);
+                cr->move_to(d.x - extents.width / 2 + 1, d.y + 31);
+                cr->show_text(d.name);
+
+                // text
+                cr->set_source_rgb(1.0, 1.0, 1.0);
+                cr->move_to(d.x - extents.width / 2, d.y + 30);
+                cr->show_text(d.name);
+            }
         }
-
-        // Draw connections
-        cr->set_line_width(2.0);
-        cr->set_source_rgb(0.7, 0.7, 0.7);
-        for (auto& d : devices) {
-            cr->move_to(d.x, d.y);
-            cr->line_to(width/2, height/2);
-            cr->stroke();
-        }
-
-        // Draw devices
-        for (auto& d : devices) {
-            // circle
-            cr->set_source_rgb(255, 255, 255);
-            cr->arc(d.x, d.y, 20.0, 0, 2*M_PI);
-            cr->fill();
-
-            // font
-            cr->select_font_face("Sans", Cairo::ToyFontFace::Slant::NORMAL, Cairo::ToyFontFace::Weight::NORMAL);
-            cr->set_font_size(10.0);
-
-            // extents
-            Cairo::TextExtents extents;
-            cr->get_text_extents(d.name, extents);
-
-            // label shadow
-            cr->set_source_rgba(0, 0, 0, 0.5);
-            cr->move_to(d.x - extents.width / 2 + 1, d.y + 31);
-            cr->show_text(d.name);
-
-            // text
-            cr->set_source_rgb(1.0, 1.0, 1.0);
-            cr->move_to(d.x - extents.width / 2, d.y + 30);
-            cr->show_text(d.name);
-        }
-
-
     }
 };
 
