@@ -5,6 +5,8 @@
 #include "cairomm/fontface.h"
 #include <gtkmm.h>
 
+#define M_PI 3.14159265358979323846
+
 /* 
 LAYOUT
 FILE | SCAN OPTIONS     | GOBUTTON  | ENTER IP TEXT FIELD
@@ -48,6 +50,7 @@ private:
     struct Network {
         std::string cidr;
         std::vector<Device> devices;
+        double center_x, center_y;
     };
 
     std::vector<Device> devices;
@@ -58,7 +61,9 @@ private:
             double dx = x - d.x;
             double dy = y - d.y;
             if (dx*dx + dy*dy <= 20*20) {
-                std::cout << "Clicked device: " << d.name << std::endl;
+                nmapVisualizerGlobals::selected = d.name;
+                std::cout << "Selected device set to: " << nmapVisualizerGlobals::selected << std::endl;
+                return;
             }
         }
     }
@@ -319,18 +324,7 @@ class nmapVisualizer : public Gtk::Application {
                 std::cout << "Device IP: " << device.ipAddress << ", MAC: " << device.macAddress << ", OS: " << device.operatingSystem << std::endl;
             }
             
-            /*
-            save_devices(devices);
-            if (auto win = dynamic_cast<MainWindow*>(get_active_window())) {
-                if (auto map_area = win->get_map_area()) {
-                    map_area->clear_devices();
-                    for (const auto& device : devices) {
-                        map_area->add_device(device);
-                    }
-                    map_area->draw();
-                }
-            }
-            */
+            save_devices(devices, target);
         }
 
     public:

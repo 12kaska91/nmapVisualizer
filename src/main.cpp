@@ -18,11 +18,16 @@ int main (int argc, char *argv[]) {
     auto app = nmapVisualizer::create();
 
     auto css = Gtk::CssProvider::create();
-    css->load_from_data(R"(
-      * {
-        border-radius: 0;
-      }
-    )");
+    css->load_from_data(
+        "/* Global styles */\n"
+        "* {\n"
+        "    color: #E6E6E6;\n"
+        "    background-color: #121212;\n"
+        "    background-image: none;\n"
+        "    border-color: #2b2b2b;\n"
+        "    border-radius: 0px;\n"
+        "}\n"
+    );
 
     Gtk::StyleContext::add_provider_for_display(
         Gdk::Display::get_default(),

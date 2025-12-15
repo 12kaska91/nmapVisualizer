@@ -37,8 +37,20 @@ public:
         : ipAddress(ip), macAddress(mac), vendor(ven), deviceType(devType), ports(prt), operatingSystem(os) {}
 };
 
+class Network {
+public:
+    std::string cidr;
+    std::vector<DeviceInfo> devices;
+    Network(
+        const std::string &c,
+        const std::vector<DeviceInfo> &d
+    )
+        : cidr(c), devices(d) {}
+};
+
 namespace nmapVisualizerGlobals {
-    extern std::vector<DeviceInfo> devices;
+    extern std::string selected;
+    extern std::vector<Network> networks;
 }
 
 #endif // GLOBALS_HPP

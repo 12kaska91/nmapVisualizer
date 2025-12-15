@@ -13,12 +13,6 @@ pkg_check_modules(LIBXML2 REQUIRED libxml-2.0)
 # gtkmm
 pkg_check_modules(GTKMM REQUIRED gtkmm-4.0)
 
-# SDL2
-pkg_check_modules(SDL2 REQUIRED sdl2)
-
-# OpenGL
-find_package(OpenGL REQUIRED)
-
 # Executable
 add_executable(main
     src/main.cpp
@@ -29,13 +23,10 @@ add_executable(main
 target_include_directories(main PRIVATE
     ${LIBXML2_INCLUDE_DIRS}
     ${GTKMM_INCLUDE_DIRS}
-    ${SDL2_INCLUDE_DIRS}
 )
 
 # Link libraries
 target_link_libraries(main PRIVATE
     ${LIBXML2_LIBRARIES}
     ${GTKMM_LIBRARIES}
-    ${SDL2_LIBRARIES}
-    OpenGL::GL
 )

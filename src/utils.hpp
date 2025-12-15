@@ -62,12 +62,17 @@ std::string run_nmap(const std::string &targets, std::string nmap_path = "") {
     #endif
 }
 
-void save_devices(const std::vector<DeviceInfo> &devices) {
-    nmapVisualizerGlobals::devices = devices;
+void save_devices(const std::vector<DeviceInfo> &devices, const std::string &cidr = "default") {
+    nmapVisualizerGlobals::networks.push_back(Network(cidr, devices));
 }
 
-std::vector<DeviceInfo> get_devices() {
-    return nmapVisualizerGlobals::devices;
+std::vector<DeviceInfo> get_devices(const std::string &cidr = "default") {
+    for (const auto& network : nmapVisualizerGlobals::networks) {
+        if (network.cidr == cidr) {
+            return network.devices;
+        }
+    }
+    return {};
 }
 
 std::vector<DeviceInfo> parse_nmap_xml(const std::string &xmlData) {

@@ -2,5 +2,6 @@
 #include "globals.hpp"
 
 namespace nmapVisualizerGlobals {
-	std::vector<DeviceInfo> devices;
+	std::vector<Network> networks;
+	std::string selected = "";
 }
