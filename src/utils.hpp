@@ -63,6 +63,7 @@ std::string run_nmap(const std::string &targets, std::string nmap_path = "") {
 }
 
 void save_devices(const std::vector<DeviceInfo> &devices, const std::string &cidr = "default") {
+    std::cout << "Saving " << devices.size() << " devices for network: " << cidr << std::endl;
     nmapVisualizerGlobals::networks.push_back(Network(cidr, devices));
 }
 

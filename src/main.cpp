@@ -27,6 +27,9 @@ int main (int argc, char *argv[]) {
         "    border-color: #2b2b2b;\n"
         "    border-radius: 0px;\n"
         "}\n"
+        "hovered {\n"
+        "    background-color: #1E1E1E;\n"
+        "}\n"
     );
 
     Gtk::StyleContext::add_provider_for_display(

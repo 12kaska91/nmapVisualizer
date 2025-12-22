@@ -20,9 +20,7 @@ DEVICE MAP                          |
 class MapArea : public Gtk::DrawingArea {
 public:
     MapArea() {
-        set_content_width(600);
-        set_content_height(400);
-
+        set_size_request(600, 400);
         gesture_click = Gtk::GestureClick::create();
         add_controller(gesture_click);
         gesture_click->signal_pressed().connect(sigc::mem_fun(*this, &MapArea::on_click));
@@ -41,6 +39,51 @@ public:
 
         set_draw_func(sigc::mem_fun(*this, &MapArea::draw_map));
     }
+    
+    // width 
+    int get_width() {
+        return get_allocated_width();
+    }
+
+    // height
+    int get_height() {
+        return get_allocated_height();
+    }
+    
+    void update_networks() {
+        for (auto& net : nmapVisualizerGlobals::networks) {
+            Network newNet;
+            newNet.cidr = net.cidr;
+            newNet.center_x = get_width() / 2.0;
+            newNet.center_y = get_height() / 2.0;
+
+            for (auto& d : net.devices) {
+                newNet.devices.push_back(Device{
+                    d.ipAddress, // name
+                    0,
+                    0
+                });
+            }
+            
+            networks.push_back(newNet);
+        }
+        for(auto& network : networks) {
+            auto& devices = network.devices;
+            for (auto& d : devices) {
+                int num = devices.size();
+                double angle = (&d - &devices[0]) * (2 * M_PI / num);
+                d.x = get_width() / 2.0 + (get_width() / 3.0) * cos(angle);
+                d.y = get_height() / 2.0 + (get_height() / 3.0) * sin(angle);
+            }
+        }
+        for (const auto& net : nmapVisualizerGlobals::networks) {
+            std::cout << "Network CIDR: " << net.cidr << ", Devices: " << net.devices.size() << std::endl;
+            for (const auto& d : net.devices) {
+                std::cout << " - Device IP: " << d.ipAddress << std::endl;
+            }
+        }
+        queue_draw();
+    }
 
 private:
     Glib::RefPtr<Gtk::GestureClick> gesture_click;
@@ -58,7 +101,7 @@ private:
 
     std::vector<Network> networks;
 
-    void on_click(int /*n_press*/, double x, double y) {
+    void on_click(int /*finger*/, double x, double y) {
         for (auto& network : networks) {
             for (auto& d : network.devices) {
                 double dx = x - d.x;
@@ -71,27 +114,15 @@ private:
             }
         }            
     }
+    
+    void draw_map(const Cairo::RefPtr<Cairo::Context>& cr, int /*width*/, int /*height*/) {
+        int width = get_width();
+        int height = get_height();
 
-    void draw_map(const Cairo::RefPtr<Cairo::Context>& cr, int width, int height) {
         // Clear background
         cr->set_source_rgb(0.1, 0.1, 0.1);
         cr->rectangle(0, 0, width, height);
         cr->fill();
-
-        if(networks.empty()) {
-            networks.push_back(Network{
-                "192.168.1.0/24",
-                {
-                    {"Device A", 0, 0},
-                    {"Device B", 0, 0},
-                    {"Device C", 0, 0},
-                    {"Device D", 0, 0},
-                    {"Device E", 0, 0}
-                },
-                width / 2.0,
-                height / 2.0
-            });
-        }
 
         for (auto& network : networks) {
             auto& devices = network.devices;
@@ -157,7 +188,7 @@ class MainWindow : public Gtk::Window {
 
             // create main layout
             auto main_paned = Gtk::make_managed<Gtk::Paned>(Gtk::Orientation::HORIZONTAL);
-            auto map_area = Gtk::make_managed<MapArea>();
+            map_area_ = Gtk::make_managed<MapArea>();
             // create boxes
             auto top_hbox = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 10); 
             auto top_hbox_left = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 5);
@@ -221,7 +252,7 @@ class MainWindow : public Gtk::Window {
 
             // devices
             // device_map_box->append(*map_area);
-            main_paned->set_start_child(*map_area);
+            main_paned->set_start_child(*map_area_);
 
             // attributes
             attrs_box->append(*Gtk::make_managed<Gtk::Label>("No selection"));
@@ -240,8 +271,8 @@ class MainWindow : public Gtk::Window {
             attrs_frame->set_vexpand(true);
             attrs_frame->set_valign(Gtk::Align::FILL);
 
-            map_area->set_hexpand(true);
-            map_area->set_vexpand(true);
+            map_area_->set_hexpand(true);
+            map_area_->set_vexpand(true);
 
             ip_entry_->set_halign(Gtk::Align::FILL);
             ip_entry_->set_hexpand(true);
@@ -274,8 +305,11 @@ class MainWindow : public Gtk::Window {
             return ip_entry_ ? ip_entry_->get_text() : "";
         }
 
+        MapArea* get_map_area() const { return map_area_; }
+
     private:
         Gtk::Entry* ip_entry_ = nullptr;
+        MapArea* map_area_ = nullptr;
 };
 
 class nmapVisualizer : public Gtk::Application {
@@ -319,19 +353,27 @@ class nmapVisualizer : public Gtk::Application {
             std::string target;
             if (auto win = dynamic_cast<MainWindow*>(get_active_window())) {
                 target = win->get_ip_entry_text();
+                
+                std::cout << "Running nmap scan on target: " << target << std::endl;
+
+                std::string nmapOutput;
+                nmapOutput = run_nmap(target, "");
+
+                auto devices = parse_nmap_xml(nmapOutput);
+                for (const auto& device : devices) {
+                    std::cout << "Device IP: " << device.ipAddress << ", MAC: " << device.macAddress << ", OS: " << device.operatingSystem << std::endl;
+                }
+                
+                save_devices(devices, target);
+
+                if (auto map = win->get_map_area()) {
+                    std::cout << "Updating map area with new scan results." << std::endl;
+                    map->update_networks();
+                    map->queue_draw();
+                } else {
+                    std::cerr << "Error: Map area not found in main window." << std::endl;
+                }
             }
-
-            std::cout << "Running nmap scan on target: " << target << std::endl;
-
-            std::string nmapOutput;
-            nmapOutput = run_nmap(target, "");
-
-            auto devices = parse_nmap_xml(nmapOutput);
-            for (const auto& device : devices) {
-                std::cout << "Device IP: " << device.ipAddress << ", MAC: " << device.macAddress << ", OS: " << device.operatingSystem << std::endl;
-            }
-            
-            save_devices(devices, target);
         }
 
     public:
