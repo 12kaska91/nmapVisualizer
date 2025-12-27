@@ -10,4 +10,4 @@ Windows:
 
 Linux:
 - Install nmap
-- Download the appimage
+- Download the binary
