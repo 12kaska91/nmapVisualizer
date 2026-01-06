@@ -184,13 +184,13 @@ private:
             }
 
             // Draw network center
-            cr->set_source_rgb(0.0, 1.0, 0.0);
-            cr->arc(width/2, height/2, 10.0, 0, 2*M_PI);
+            cr->set_source_rgb(1.0, 1.0, 1.0);
+            cr->arc(width/2, height/2, 20.0, 0, 2*M_PI);
             cr->fill();
 
             // Draw network label
             cr->select_font_face("Sans", Cairo::ToyFontFace::Slant::NORMAL, Cairo::ToyFontFace::Weight::BOLD);
-            cr->set_font_size(14.0);
+            cr->set_font_size(10.0);
             Cairo::TextExtents extents;
             cr->get_text_extents(network.cidr, extents);
 
