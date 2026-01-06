@@ -20,7 +20,7 @@ std::string win_run_nmap_xml(const std::string &targets, const std::string &nmap
     // _popen is available on Windows; returns FILE* you can read
     FILE* pipe = _popen(cmd.c_str(), "r");
     if (!pipe) {
-        throw std::runtime_error("Failed to run nmap (is it installed and in PATH?)");
+        throw std::runtime_error("Failed to run nmap (is it installed in the default path?)");
     }
     while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr) {
         result += buffer.data();
