@@ -5,6 +5,9 @@
 #include "cairomm/fontface.h"
 #include <gtkmm.h>
 #include <sigc++/sigc++.h>
+#include <future>
+#include <sstream>
+#include <memory>
 
 #define M_PI 3.14159265358979323846
 
@@ -53,6 +56,7 @@ public:
     }
     
     void update_networks() {
+        std::lock_guard<std::mutex> lock(nmapVisualizerGlobals::networks_mutex);
         networks.clear();
         for (auto& net : nmapVisualizerGlobals::networks) {
             Network newNet;
@@ -116,11 +120,13 @@ private:
             if (dx*dx + dy*dy <= 20*20) {
                 nmapVisualizerGlobals::selected = d.info.ipAddress;
                 signal_device_selected_.emit(d.info);
+                queue_draw();
                 return;
             }
         }
         nmapVisualizerGlobals::selected.clear();
         signal_cleared_.emit();
+        queue_draw();
     }
     
     void draw_map(const Cairo::RefPtr<Cairo::Context>& cr, int /*width*/, int /*height*/) {
@@ -254,6 +260,11 @@ class MainWindow : public Gtk::Window {
             attrs_box->append(*attrs_grid);
             show_empty_attrs();
 
+            // Add status label
+            status_label_ = Gtk::make_managed<Gtk::Label>("");
+            status_label_->set_xalign(0);
+            attrs_box->append(*status_label_);
+
             /*
             #########################
             ##       TOP BAR       ##
@@ -382,6 +393,13 @@ class MainWindow : public Gtk::Window {
             if (os_label_) os_label_->set_text("-");
             if (ports_label_) ports_label_->set_text("-");
         }
+
+        void set_status(const std::string& status) {
+            if (status_label_) {
+                status_label_->set_text(status);
+            }
+        }
+
     private:
         Gtk::Entry* ip_entry_ = nullptr;
         MapArea* map_area_ = nullptr;
@@ -390,11 +408,14 @@ class MainWindow : public Gtk::Window {
         Gtk::Label* vendor_label_ = nullptr;
         Gtk::Label* os_label_ = nullptr;
         Gtk::Label* ports_label_ = nullptr;
+        Gtk::Label* status_label_ = nullptr;
 };
 
 class nmapVisualizer : public Gtk::Application {
     protected:
-        nmapVisualizer() : Gtk::Application("org.kaska.nmapVisualizer") {}
+        nmapVisualizer() : Gtk::Application("org.kaska.nmapVisualizer") {
+            scanner_ = std::make_unique<ParallelScanner>();
+        }
 
         void on_startup() override {
             Gtk::Application::on_startup();
@@ -403,6 +424,12 @@ class nmapVisualizer : public Gtk::Application {
             add_action("hello", sigc::mem_fun(*this, &nmapVisualizer::on_hello));
             add_action("quit", sigc::mem_fun(*this, &nmapVisualizer::on_quit));
             add_action("go_button", sigc::mem_fun(*this, &nmapVisualizer::on_go_button_clicked));
+            
+            // Start periodic timer to check for scan completion
+            Glib::signal_timeout().connect(
+                sigc::mem_fun(*this, &nmapVisualizer::on_timer_check_scans),
+                500  // Check every 500ms
+            );
         }
 
         void on_activate() override {
@@ -434,27 +461,83 @@ class nmapVisualizer : public Gtk::Application {
             if (auto win = dynamic_cast<MainWindow*>(get_active_window())) {
                 target = win->get_ip_entry_text();
                 
-                std::cout << "Running nmap scan on target: " << target << std::endl;
-
-                std::string nmapOutput;
-                nmapOutput = run_nmap(target, "");
-
-                auto devices = parse_nmap_xml(nmapOutput);
-                for (const auto& device : devices) {
-                    std::cout << "Device IP: " << device.ipAddress << ", MAC: " << device.macAddress << ", OS: " << device.operatingSystem << std::endl;
+                if (target.empty()) {
+                    win->set_status("Error: Please enter a target IP or network");
+                    return;
                 }
                 
-                save_devices(devices, target);
-
-                if (auto map = win->get_map_area()) {
-                    std::cout << "Updating map area with new scan results." << std::endl;
-                    map->update_networks();
-                    map->queue_draw();
-                } else {
-                    std::cerr << "Error: Map area not found in main window." << std::endl;
+                std::cout << "Starting parallel nmap scan on target: " << target << std::endl;
+                win->set_status("Scanning " + target + "...");
+                
+                // Parse multiple targets (comma or space separated)
+                std::vector<std::string> targets;
+                std::stringstream ss(target);
+                std::string item;
+                
+                // Try comma first
+                while (std::getline(ss, item, ',')) {
+                    // Trim whitespace
+                    item.erase(0, item.find_first_not_of(" \t\n\r\f\v"));
+                    item.erase(item.find_last_not_of(" \t\n\r\f\v") + 1);
+                    if (!item.empty()) {
+                        targets.push_back(item);
+                    }
                 }
+                
+                // If no comma found, try space
+                if (targets.size() <= 1) {
+                    targets.clear();
+                    ss.clear();
+                    ss.str(target);
+                    while (ss >> item) {
+                        targets.push_back(item);
+                    }
+                }
+                
+                // Launch parallel scans
+                for (const auto& t : targets) {
+                    scanner_->add_scan(t, t);
+                }
+                
+                win->set_status("Scanning " + std::to_string(targets.size()) + " target(s)...");
             }
         }
+        
+        // Timer callback to check scan progress
+        bool on_timer_check_scans() {
+            if (scanner_->check_progress()) {
+                // A scan completed, update the UI
+                if (auto win = dynamic_cast<MainWindow*>(get_active_window())) {
+                    if (auto map = win->get_map_area()) {
+                        // Use Glib dispatcher for thread-safe UI update
+                        Glib::signal_idle().connect_once([win, map]() {
+                            map->update_networks();
+                            map->queue_draw();
+                            
+                            int active = 0;
+                            // Update status would require scanner access, simplified here
+                            win->set_status("Scan completed. Ready.");
+                        });
+                    }
+                }
+                scanner_->clear_completed();
+            }
+            
+            // Update status with active scan count
+            int active_scans = scanner_->active_count();
+            if (active_scans > 0) {
+                if (auto win = dynamic_cast<MainWindow*>(get_active_window())) {
+                    Glib::signal_idle().connect_once([win, active_scans]() {
+                        win->set_status("Scanning... (" + std::to_string(active_scans) + " active)");
+                    });
+                }
+            }
+            
+            return true;  // Keep timer running
+        }
+
+    private:
+        std::unique_ptr<ParallelScanner> scanner_;
 
     public:
         static Glib::RefPtr<nmapVisualizer> create() {

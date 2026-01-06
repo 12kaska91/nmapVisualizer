@@ -7,11 +7,16 @@
 #include <string>
 #include <stdexcept>
 #include <libxml/parser.h>
+#include <future>
+#include <thread>
+#include <vector>
+#include <algorithm>
+#include <mutex>
 
 #include "globals.hpp"
 
 #if defined(_WIN32) || defined(_WIN64)
-std::string win_run_nmap_xml(const std::string &targets, const std::string &nmap_path = "C:\\Program Files (x86)\\Nmap\\nmap.exe") {
+std::string win_run_nmap_xml(const std::string &targets, const std::string &nmap_path) {
     // Note: " -oX - " -> XML to stdout
     std::string cmd = "\"" + nmap_path + "\" -oX - " + targets + " 2>nul";
     std::array<char, 4096> buffer;
@@ -31,7 +36,7 @@ std::string win_run_nmap_xml(const std::string &targets, const std::string &nmap
 #endif
 
 #if defined(__linux__)
-std::string linux_run_nmap_xml(const std::string &targets, const std::string &nmap_path = "/usr/bin/nmap") {
+std::string linux_run_nmap_xml(const std::string &targets, const std::string &nmap_path) {
     // Note: " -oX - " -> XML to stdout
     std::string cmd = nmap_path + " -oX - " + targets + " 2>/dev/null";
     std::array<char, 4096> buffer;
@@ -64,10 +69,12 @@ std::string run_nmap(const std::string &targets, std::string nmap_path = "") {
 
 void save_devices(const std::vector<DeviceInfo> &devices, const std::string &cidr = "default") {
     std::cout << "Saving " << devices.size() << " devices for network: " << cidr << std::endl;
+    std::lock_guard<std::mutex> lock(nmapVisualizerGlobals::networks_mutex);
     nmapVisualizerGlobals::networks.push_back(Network(cidr, devices));
 }
 
 std::vector<DeviceInfo> get_devices(const std::string &cidr = "default") {
+    std::lock_guard<std::mutex> lock(nmapVisualizerGlobals::networks_mutex);
     for (const auto& network : nmapVisualizerGlobals::networks) {
         if (network.cidr == cidr) {
             return network.devices;
@@ -210,5 +217,97 @@ std::vector<DeviceInfo> parse_nmap_xml(const std::string &xmlData) {
     }
     return devices;
 }
+
+// Parallel nmap scanning - scan multiple targets concurrently
+struct ScanTask {
+    std::string target;
+    std::string cidr;
+    std::future<void> future;
+    bool completed = false;
+};
+
+class ParallelScanner {
+private:
+    std::vector<ScanTask> tasks_;
+    std::mutex tasks_mutex_;
+    
+public:
+    // Add a scan task (non-blocking)
+    void add_scan(const std::string& target, const std::string& cidr = "") {
+        std::string actual_cidr = cidr.empty() ? target : cidr;
+        
+        auto future = std::async(std::launch::async, [target, actual_cidr]() {
+            try {
+                std::cout << "Starting parallel scan for: " << target << std::endl;
+                std::string nmapOutput = run_nmap(target, "");
+                auto devices = parse_nmap_xml(nmapOutput);
+                
+                if (!devices.empty()) {
+                    save_devices(devices, actual_cidr);
+                    std::cout << "Completed scan for: " << target << " (" << devices.size() << " devices found)" << std::endl;
+                } else {
+                    std::cout << "Scan completed for: " << target << " (no devices found)" << std::endl;
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "Error scanning " << target << ": " << e.what() << std::endl;
+            }
+        });
+        
+        std::lock_guard<std::mutex> lock(tasks_mutex_);
+        tasks_.push_back(ScanTask{target, actual_cidr, std::move(future), false});
+    }
+    
+    // Check if any scans have completed (non-blocking)
+    bool check_progress() {
+        std::lock_guard<std::mutex> lock(tasks_mutex_);
+        bool any_completed = false;
+        
+        for (auto& task : tasks_) {
+            if (!task.completed && task.future.valid()) {
+                auto status = task.future.wait_for(std::chrono::milliseconds(0));
+                if (status == std::future_status::ready) {
+                    task.future.get(); // collect the result
+                    task.completed = true;
+                    any_completed = true;
+                }
+            }
+        }
+        
+        return any_completed;
+    }
+    
+    // Wait for all scans to complete
+    void wait_all() {
+        std::lock_guard<std::mutex> lock(tasks_mutex_);
+        for (auto& task : tasks_) {
+            if (task.future.valid()) {
+                task.future.wait();
+            }
+        }
+    }
+    
+    // Get number of active scans
+    int active_count() {
+        std::lock_guard<std::mutex> lock(tasks_mutex_);
+        int count = 0;
+        for (const auto& task : tasks_) {
+            if (!task.completed) count++;
+        }
+        return count;
+    }
+    
+    // Clear completed tasks
+    void clear_completed() {
+        std::lock_guard<std::mutex> lock(tasks_mutex_);
+        auto it = tasks_.begin();
+        while (it != tasks_.end()) {
+            if (it->completed) {
+                it = tasks_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+};
 
 #endif // UTILS_HPP

@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include <mutex>
 
 class Port {
 public:
@@ -49,6 +50,7 @@ public:
 namespace nmapVisualizerGlobals {
     extern std::string selected;
     extern std::vector<Network> networks;
+    extern std::mutex networks_mutex;
 }
 
 #endif // GLOBALS_HPP
